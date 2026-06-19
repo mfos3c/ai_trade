@@ -19,6 +19,8 @@ def write_signals_json(report_dir: str | Path, decisions: list, stats: dict) -> 
 
     rows = []
     for d in sorted(decisions, key=lambda x: x.confidence, reverse=True):
+        if d.direction == "NEUTRAL":
+            continue  # 60 alti ve karisik sinyalleri gizle
         rows.append({
             "symbol": d.symbol,
             "direction": d.direction,

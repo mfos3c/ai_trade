@@ -28,7 +28,7 @@ strategy:
     volume:         0.08    # Hacim teyidi
 
   adx_min: 20               # bu degerin altinda trend zayif sayilir
-  min_confidence: 55        # bu guven altindaki sinyaller ELENIR
+  min_confidence: 60        # bu guven altindaki sinyaller ELENIR — isleme girilmez
   rsi_overbought: 70
   rsi_oversold: 30
 

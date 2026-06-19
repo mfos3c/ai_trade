@@ -106,7 +106,7 @@ def run_once(cfg, *, no_ai: bool = False, verbose: bool = True) -> dict:
         active_sigs = [
             {"symbol": d.symbol, "direction": d.direction, "confidence": d.confidence,
              "leverage": d.leverage, "price": d.price, "take_profit": d.take_profit}
-            for d in decisions if d.direction != "NEUTRAL" and d.confidence >= 70
+            for d in decisions if d.direction != "NEUTRAL" and d.confidence >= 65
         ]
         notifier.send_scan_alert(active_sigs)
 

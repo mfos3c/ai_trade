@@ -48,10 +48,10 @@ def _recommend_leverage(confidence: float, atr_pct: float, base: int = 10) -> in
         lev = 15
     elif confidence >= 65:
         lev = 12
-    elif confidence >= 55:
+    elif confidence >= 60:
         lev = 10
     else:
-        lev = 7
+        lev = 7  # min_confidence=60 nedeniyle bu dala girmez, sadece fallback
 
     # Volatilite cezasi
     if atr_pct > 0.06:

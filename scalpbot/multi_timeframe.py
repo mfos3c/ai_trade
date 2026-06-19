@@ -63,12 +63,10 @@ def _recommend_leverage(confluence: float, atr_pct: float) -> int:
         lev = 15
     elif confluence >= 65:
         lev = 12
-    elif confluence >= 55:
+    elif confluence >= 60:
         lev = 10
-    elif confluence >= 45:
-        lev = 7
     else:
-        lev = 5
+        lev = 5  # 60 alti zaten NEUTRAL — sadece fallback
 
     # Volatilite cezasi: yuksek ATR → daha az kaldirac
     if atr_pct > 0.06:      # >6% ATR — cok volatil
@@ -225,6 +223,13 @@ def analyze_symbol(
     if abs(funding) > 0.001:
         side = "pozitif" if funding > 0 else "negatif"
         note = f"Funding rate {side} ({funding*100:.3f}%) — {('SHORT' if funding > 0 else 'LONG')} icin ek maliyet"
+
+    # 60 alti MTF uyumu: isleme girilmez, NEUTRAL dondur
+    MTF_MIN_CONFLUENCE = 60
+    if confluence < MTF_MIN_CONFLUENCE and final_direction != "NEUTRAL":
+        not_ekle = f" | MTF confluence ({confluence:.0f}) < {MTF_MIN_CONFLUENCE} — isleme girme"
+        note = (note + not_ekle).strip(" | ")
+        final_direction = "NEUTRAL"
 
     return MTFResult(
         symbol=symbol,
