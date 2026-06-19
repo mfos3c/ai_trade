@@ -58,15 +58,19 @@ class PaperTrader:
         self.state = self._load()
 
     # ── persistence ────────────────────────────────────────────
+
     def _load(self) -> PaperState:
         if self.path.exists():
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-            return PaperState(
-                balance=raw["balance"],
-                start_balance=raw["start_balance"],
-                open_positions=[Position(**p) for p in raw.get("open_positions", [])],
-                closed_trades=[ClosedTrade(**t) for t in raw.get("closed_trades", [])],
-            )
+            try:
+                raw = json.loads(self.path.read_text(encoding="utf-8"))
+                return PaperState(
+                    balance=raw["balance"],
+                    start_balance=raw["start_balance"],
+                    open_positions=[Position(**p) for p in raw.get("open_positions", [])],
+                    closed_trades=[ClosedTrade(**t) for t in raw.get("closed_trades", [])],
+                )
+            except (KeyError, ValueError, TypeError):
+                pass  # bozuk state dosyasi -> sifirdan basla
         start = float(self.risk.get("start_balance", 10.0))
         return PaperState(balance=start, start_balance=start)
 
@@ -82,6 +86,7 @@ class PaperTrader:
         self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     # ── yardimcilar ────────────────────────────────────────────
+
     def has_position(self, symbol: str) -> bool:
         return any(p.symbol == symbol for p in self.state.open_positions)
 
@@ -93,6 +98,7 @@ class PaperTrader:
         return notional * float(self.risk.get("fee_rate", 0.0005))
 
     # ── pozisyon acma ──────────────────────────────────────────
+
     def open_position(self, decision, atr: float) -> Position | None:
         if decision.direction not in ("LONG", "SHORT"):
             return None
@@ -103,18 +109,29 @@ class PaperTrader:
         if atr <= 0 or decision.price <= 0:
             return None
 
-        leverage = float(self.risk.get("leverage", 10))
+        # Dinamik kaldirac: decision.leverage kullan (yoksa konfigden)
+        leverage = float(getattr(decision, "leverage", self.risk.get("leverage", 10)))
+
         fixed_margin = float(self.risk.get("fixed_margin", 0))
-        margin = fixed_margin if fixed_margin > 0 else self.state.balance * float(self.risk.get("risk_fraction", 0.25))
-        if margin < 0.1:
+        if fixed_margin > 0:
+            margin = fixed_margin
+        else:
+            margin = self.state.balance * float(self.risk.get("risk_fraction", 0.25))
+
+        if margin <= 0:
             return None
+
+        # Sadece komisyon borcunu karsilayacak kadar bakiye olmali
+        open_fee = self._fee(margin * leverage)
+        if self.state.balance < open_fee + 0.001:
+            return None
+
         notional = margin * leverage
         qty = notional / decision.price
 
         stop_loss, take_profit = trade_levels(decision.price, atr, decision.direction, self.risk)
 
-        # acilis komisyonu pesin dusulur
-        self.state.balance -= self._fee(notional)
+        self.state.balance -= open_fee  # acilis komisyonu pesin
 
         pos = Position(
             symbol=decision.symbol,
@@ -134,6 +151,7 @@ class PaperTrader:
         return pos
 
     # ── acik pozisyonlari guncel fiyata gore degerlendir ───────
+
     def update_positions(self, prices: dict[str, float]) -> list[ClosedTrade]:
         """SL/TP'ye deyen pozisyonlari kapatir. Kapanan islemleri dondurur."""
         still_open: list[Position] = []
@@ -180,7 +198,7 @@ class PaperTrader:
         gross = sign * (exit_price - p.entry) * p.qty
         exit_notional = exit_price * p.qty
         net = gross - self._fee(exit_notional)
-        self.state.balance += net
+        self.state.balance = max(0.0, self.state.balance + net)  # bakiye asla negatife dusmez
         pnl_pct = (net / p.margin * 100) if p.margin else 0.0
 
         trade = ClosedTrade(
@@ -199,6 +217,7 @@ class PaperTrader:
         return trade
 
     # ── istatistik ─────────────────────────────────────────────
+
     def stats(self) -> dict:
         trades = self.state.closed_trades
         wins = [t for t in trades if t.pnl > 0]
@@ -207,6 +226,21 @@ class PaperTrader:
         win_rate = (len(wins) / total * 100) if total else 0.0
         total_pnl = sum(t.pnl for t in trades)
         roi = ((self.state.balance - self.state.start_balance) / self.state.start_balance * 100)
+
+        gross_profit = sum(t.pnl for t in wins) if wins else 0.0
+        gross_loss = abs(sum(t.pnl for t in losses)) if losses else 1e-9
+        profit_factor = round(gross_profit / gross_loss, 2)
+
+        # Max drawdown
+        balance = self.state.start_balance
+        peak = balance
+        max_dd = 0.0
+        for t in trades:
+            balance += t.pnl
+            peak = max(peak, balance)
+            dd = (peak - balance) / peak * 100 if peak > 0 else 0.0
+            max_dd = max(max_dd, dd)
+
         return {
             "balance": round(self.state.balance, 4),
             "start_balance": self.state.start_balance,
@@ -216,5 +250,7 @@ class PaperTrader:
             "losses": len(losses),
             "win_rate": round(win_rate, 1),
             "total_pnl": round(total_pnl, 4),
+            "profit_factor": profit_factor,
+            "max_drawdown_pct": round(max_dd, 1),
             "open_positions": self.open_count,
         }

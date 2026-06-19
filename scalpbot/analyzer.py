@@ -22,10 +22,11 @@ class Decision:
     votes: dict = field(default_factory=dict)
     stop_loss: float = 0.0
     take_profit: float = 0.0
+    leverage: int = 10      # dinamik kaldirac onerisi
 
 
 def trade_levels(price: float, atr: float, direction: str, risk_cfg: dict) -> tuple[float, float]:
-    """ATR tabanli stop-loss ve take-profit seviyeleri (entry = price)."""
+    """ATR tabanli stop-loss ve take-profit seviyeleri."""
     sl_mult = float(risk_cfg.get("atr_sl_mult", 1.5))
     rr = float(risk_cfg.get("risk_reward", 1.8))
     sl_dist = sl_mult * atr
@@ -34,6 +35,33 @@ def trade_levels(price: float, atr: float, direction: str, risk_cfg: dict) -> tu
     if direction == "SHORT":
         return price + sl_dist, price - sl_dist * rr
     return 0.0, 0.0
+
+
+def _recommend_leverage(confidence: float, atr_pct: float, base: int = 10) -> int:
+    """
+    Guven (0-100) ve volatilite (ATR%) bazli dinamik kaldirac.
+    Kucuk bakiye ($10) icin: dusuk volatilite + yuksek guven = daha yuksek kaldirac.
+    """
+    if confidence >= 85:
+        lev = 20
+    elif confidence >= 75:
+        lev = 15
+    elif confidence >= 65:
+        lev = 12
+    elif confidence >= 55:
+        lev = 10
+    else:
+        lev = 7
+
+    # Volatilite cezasi
+    if atr_pct > 0.06:
+        lev = max(3, lev // 3)
+    elif atr_pct > 0.04:
+        lev = max(5, lev // 2)
+    elif atr_pct > 0.025:
+        lev = max(7, int(lev * 0.75))
+
+    return lev
 
 
 def combine(ta: TASignal, ai: AIVerdict | None, cfg_strategy: dict) -> Decision:
@@ -68,8 +96,12 @@ def combine(ta: TASignal, ai: AIVerdict | None, cfg_strategy: dict) -> Decision:
 
     # Guven esigi
     if direction != "NEUTRAL" and confidence < min_conf:
-        note = note or f"Guven {confidence} < esik {min_conf} -> elendi"
+        note = note or f"Guven {confidence:.1f} < esik {min_conf} -> elendi"
         direction = "NEUTRAL"
+
+    # Dinamik kaldirac
+    atr_pct = ta.atr / ta.price if ta.price > 0 else 0.0
+    leverage = _recommend_leverage(confidence, atr_pct)
 
     return Decision(
         symbol=ta.symbol,
@@ -81,4 +113,5 @@ def combine(ta: TASignal, ai: AIVerdict | None, cfg_strategy: dict) -> Decision:
         ai=ai,
         note=note,
         votes=ta.votes,
+        leverage=leverage,
     )

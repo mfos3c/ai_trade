@@ -1,45 +1,53 @@
 # ════════════════════════════════════════════════════════════════
-#  Scalp Bot — yapilandirma
-#  $1 altindaki Binance Futures coinleri, 15dk grafikte LONG/SHORT
+#  Scalp Bot — yapilandirma v2
+#  $1 altindaki Binance Futures coinleri, coklu zaman diliminde
+#  LONG/SHORT sinyali + dinamik kaldirac + $10 paper trading
 # ════════════════════════════════════════════════════════════════
 
 market:
-  timeframe: "15m"          # analiz periyodu
-  max_price: 1.0            # sadece fiyati < 1$ olan coinler
+  timeframe: "15m"          # ana analiz periyodu
+  max_price: 1.0            # sadece fiyati < $1 olan coinler
   quote_asset: "USDT"       # USDT pariteleri
   klines_limit: 200         # her coin icin cekilecek mum sayisi
-  max_symbols: 40           # bir taramada islenecek max coin (hiz/limit)
+  max_symbols: 40           # bir taramada islenecek max coin
   min_quote_volume: 5000000 # 24s min islem hacmi (USDT) — illikit coinleri ele
 
 strategy:
-  # Her indikatorun toplam skora agirligi (sinyal -1..+1 arasi uretir)
+  # ── indikator agirliklari (toplam 1.0 olmali) ──────────────
+  # Her indikator -1..+1 oy verir; agirlik * oy = toplam skor katkisi
   weights:
-    ema_trend: 0.22         # EMA9/EMA21/EMA50 dizilimi
-    rsi: 0.15               # RSI(14)
-    macd: 0.18              # MACD histogram + kesisim
-    bollinger: 0.12         # Bollinger band konumu
-    stochastic: 0.10        # Stochastic %K/%D
-    adx: 0.13               # trend gucu (ADX) + DI yonu
-    volume: 0.10            # hacim teyidi
+    ema_trend:      0.17    # EMA9/EMA21/EMA50 dizilimi (ana trend)
+    supertrend:     0.12    # Supertrend gostergesi (yeni)
+    rsi:            0.11    # RSI(14) asiri alim/satim + momentum
+    rsi_divergence: 0.08    # RSI uyusmazligi — guclu reversal sinyali (yeni)
+    macd:           0.15    # MACD kesisim + histogram yonu
+    bollinger:      0.09    # Bollinger bant konumu
+    vwap:           0.10    # VWAP'a gore fiyat konumu (yeni)
+    stochastic:     0.08    # Stochastic %K/%D
+    adx:            0.12    # Trend gucu (ADX) + DI yonu
+    volume:         0.08    # Hacim teyidi
+
   adx_min: 20               # bu degerin altinda trend zayif sayilir
-  min_confidence: 55        # bu guvenin altindaki sinyaller ELENIR (NEUTRAL)
+  min_confidence: 55        # bu guven altindaki sinyaller ELENIR
   rsi_overbought: 70
   rsi_oversold: 30
+
   # AI (MiniMax) ile TA skorunun birlestirilmesi
-  ai_weight: 0.40           # 0 = sadece TA, 1 = sadece AI
-  require_ai_agreement: false  # true ise AI ile TA ayni yonde degilse sinyal iptal
+  ai_weight: 0.38           # 0 = sadece TA, 1 = sadece AI
+  require_ai_agreement: false  # true ise AI ile TA ayni yonde degilse iptal
 
 risk:
   start_balance: 10.0       # baslangic bakiyesi (USDT, simulasyon)
   fixed_margin: 10.0        # her islemde kullanilacak sabit marjin (USDT)
-  leverage: 10              # kaldirac
-  risk_fraction: 0.25       # fixed_margin tanimsizsa kullanilir
+                            # 0 ise risk_fraction * bakiye kullanilir
+  leverage: 10              # baz kaldirac (guven skoruna gore dinamik olarak degisir)
+  risk_fraction: 0.25       # fixed_margin=0 ise bakiyenin bu kadarini riske at
   atr_sl_mult: 1.5          # stop-loss = giris -/+ 1.5 * ATR
-  risk_reward: 1.8          # take-profit = SL mesafesinin 1.8 kati
+  risk_reward: 1.8          # take-profit = SL mesafesinin 1.8 kati (R/R 1:1.8)
   fee_rate: 0.0005          # taker komisyon (tek yon) — Binance ~0.05%
   max_open_positions: 5     # ayni anda max acik pozisyon
 
 run:
-  interval_seconds: 900     # loop modunda tarama araligi (900 = 15dk)
+  interval_seconds: 900     # loop modunda tarama araligi (900s = 15dk)
   state_file: "data/state.json"
   report_dir: "data"

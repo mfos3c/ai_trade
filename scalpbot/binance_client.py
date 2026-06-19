@@ -13,7 +13,7 @@ class BinanceFutures:
         self.base = base_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "scalp-bot/0.1"})
+        self.session.headers.update({"User-Agent": "scalp-bot/0.2"})
 
     def _get(self, path: str, params: dict | None = None) -> Any:
         url = f"{self.base}{path}"
@@ -25,7 +25,8 @@ class BinanceFutures:
                 return r.json()
             except requests.RequestException as e:
                 last_err = e
-                time.sleep(2 ** attempt)
+                if attempt < 3:
+                    time.sleep(min(2 ** attempt, 8))
         raise RuntimeError(f"Binance istegi basarisiz: {url} ({last_err})")
 
     def exchange_info(self) -> dict:
@@ -94,3 +95,29 @@ class BinanceFutures:
         df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
         df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
         return df
+
+    def funding_rate(self, symbol: str) -> float:
+        """Sembol icin guncel funding rate (ondalik, ornek: 0.0001 = 0.01%)."""
+        try:
+            data = self._get("/fapi/v1/fundingRate", {"symbol": symbol, "limit": 1})
+            if isinstance(data, list) and data:
+                return float(data[0].get("fundingRate", 0))
+        except Exception:
+            pass
+        return 0.0
+
+    def open_interest(self, symbol: str) -> float:
+        """Sembol icin acik faiz miktari (coin cinsinden)."""
+        try:
+            data = self._get("/fapi/v1/openInterest", {"symbol": symbol})
+            return float(data.get("openInterest", 0))
+        except Exception:
+            return 0.0
+
+    def validate_symbol(self, symbol: str) -> bool:
+        """Sembolun Binance Futures'ta gecerli olup olmadigini kontrol eder."""
+        try:
+            tradable = self.tradable_usdt_symbols()
+            return symbol in tradable
+        except Exception:
+            return False

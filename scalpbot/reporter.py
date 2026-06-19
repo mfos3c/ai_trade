@@ -23,6 +23,7 @@ def write_signals_json(report_dir: str | Path, decisions: list, stats: dict) -> 
             "symbol": d.symbol,
             "direction": d.direction,
             "confidence": d.confidence,
+            "leverage": getattr(d, "leverage", 10),
             "price": d.price,
             "atr": d.atr,
             "stop_loss": d.stop_loss,

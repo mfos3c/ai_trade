@@ -20,6 +20,9 @@ class TASignal:
     snapshot: dict = field(default_factory=dict)  # ham indikator degerleri
 
 
+# ── bireysel oy fonksiyonlari ──────────────────────────────────────────────
+
+
 def _ema_vote(s: dict) -> float:
     if s["ema9"] > s["ema21"] > s["ema50"]:
         return 1.0
@@ -35,11 +38,10 @@ def _ema_vote(s: dict) -> float:
 def _rsi_vote(s: dict, ob: float, os_: float) -> float:
     r = s["rsi"]
     if r <= os_:
-        return 1.0          # asiri satim -> long firsati
+        return 1.0
     if r >= ob:
-        return -1.0         # asiri alim -> short firsati
-    # trend onayi: 50 ustu long egilimi
-    return (r - 50) / 20.0  # ~ -1..+1 arasi yumusak
+        return -1.0
+    return (r - 50) / 20.0  # ~-1..+1 arasi yumusak
 
 
 def _macd_vote(s: dict) -> float:
@@ -60,7 +62,7 @@ def _bollinger_vote(s: dict) -> float:
         return 1.0
     if pos >= 0.9:
         return -1.0
-    return (0.5 - pos) * 2.0   # merkeze gore yumusak egilim
+    return (0.5 - pos) * 2.0
 
 
 def _stoch_vote(s: dict) -> float:
@@ -78,7 +80,7 @@ def _stoch_vote(s: dict) -> float:
 
 def _adx_vote(s: dict, adx_min: float) -> float:
     if s["adx"] < adx_min:
-        return 0.0          # trend zayif -> yon teyidi yok
+        return 0.0  # trend zayif -> yon teyidi yok
     return 1.0 if s["plus_di"] > s["minus_di"] else -1.0
 
 
@@ -86,7 +88,6 @@ def _volume_vote(s: dict) -> float:
     if s["vol_sma"] <= 0:
         return 0.0
     ratio = s["volume"] / s["vol_sma"]
-    # yuksek hacim = teyit; yonu fiyat hareketinden cikar
     direction = 1.0 if s["price"] >= s["ema21"] else -1.0
     if ratio >= 1.5:
         return direction
@@ -95,29 +96,58 @@ def _volume_vote(s: dict) -> float:
     return 0.0
 
 
+def _vwap_vote(s: dict) -> float:
+    """Fiyatin VWAP'a gore konumu."""
+    vwap_val = s.get("vwap", 0)
+    if vwap_val <= 0:
+        return 0.0
+    price = s["price"]
+    diff_pct = (price - vwap_val) / vwap_val
+    # 2% farkin ustu/alti = tam sinyal; arada dogrusal gecis
+    return max(-1.0, min(1.0, diff_pct * 50))
+
+
+def _supertrend_vote(s: dict) -> float:
+    """Supertrend yonu: yukari = +1, asagi = -1."""
+    return 1.0 if s.get("supertrend_bull", False) else -1.0
+
+
+def _divergence_vote(s: dict) -> float:
+    """RSI uyusmazligi katkisi."""
+    return float(s.get("rsi_divergence", 0.0))
+
+
+# ── ana degerleyici ────────────────────────────────────────────────────────
+
+
 def evaluate(symbol: str, df: pd.DataFrame, cfg_strategy: dict) -> TASignal | None:
     if df is None or len(df) < 60:
         return None
 
     s = indicators.compute_all(df)
-    w = cfg_strategy["weights"]
+    w = cfg_strategy.get("weights", {})
     ob = cfg_strategy.get("rsi_overbought", 70)
     os_ = cfg_strategy.get("rsi_oversold", 30)
     adx_min = cfg_strategy.get("adx_min", 20)
 
     votes = {
-        "ema_trend": _ema_vote(s),
-        "rsi": _rsi_vote(s, ob, os_),
-        "macd": _macd_vote(s),
-        "bollinger": _bollinger_vote(s),
-        "stochastic": _stoch_vote(s),
-        "adx": _adx_vote(s, adx_min),
-        "volume": _volume_vote(s),
+        "ema_trend":     _ema_vote(s),
+        "supertrend":    _supertrend_vote(s),
+        "rsi":           _rsi_vote(s, ob, os_),
+        "rsi_divergence": _divergence_vote(s),
+        "macd":          _macd_vote(s),
+        "bollinger":     _bollinger_vote(s),
+        "vwap":          _vwap_vote(s),
+        "stochastic":    _stoch_vote(s),
+        "adx":           _adx_vote(s, adx_min),
+        "volume":        _volume_vote(s),
     }
 
-    score = sum(votes[k] * w.get(k, 0.0) for k in votes)
+    # Sadece konfigurasyondaki agirliklar kullanilanlar hesaba katilir;
+    # bilinmeyen indikator eklenirse config guncellenmeden skor bozulmaz
+    weighted_sum = sum(votes[k] * w.get(k, 0.0) for k in votes)
     total_w = sum(w.get(k, 0.0) for k in votes) or 1.0
-    score = max(-1.0, min(1.0, score / total_w))
+    score = max(-1.0, min(1.0, weighted_sum / total_w))
     confidence = round(abs(score) * 100, 1)
 
     if score > 0:

@@ -17,7 +17,6 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0.0)
     loss = -delta.clip(upper=0.0)
-    # Wilder yumusatmasi
     avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
@@ -88,6 +87,96 @@ def adx(
     return adx_.fillna(0), plus_di.fillna(0), minus_di.fillna(0)
 
 
+def vwap(df: pd.DataFrame) -> pd.Series:
+    """Volume Weighted Average Price (kumulatif, session bazli)."""
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    cum_vol = df["volume"].cumsum()
+    cum_tp_vol = (typical * df["volume"]).cumsum()
+    result = cum_tp_vol / cum_vol.replace(0, np.nan)
+    return result.ffill().fillna(typical)
+
+
+def supertrend(
+    high: pd.Series, low: pd.Series, close: pd.Series,
+    period: int = 10, multiplier: float = 3.0,
+) -> pd.Series:
+    """
+    Supertrend gostergesi.
+    True = yukari trend (fiyat destek uzerinde), False = asagi trend.
+    """
+    atr_val = atr(high, low, close, period)
+    hl2 = (high + low) / 2
+
+    basic_upper = (hl2 + multiplier * atr_val).values
+    basic_lower = (hl2 - multiplier * atr_val).values
+    close_arr = close.values
+    n = len(close_arr)
+
+    final_upper = basic_upper.copy()
+    final_lower = basic_lower.copy()
+    direction = np.ones(n, dtype=bool)
+
+    for i in range(1, n):
+        # Upper band: sadece azalabilir ya da reset olur
+        if np.isnan(basic_upper[i]) or np.isnan(final_upper[i - 1]):
+            final_upper[i] = basic_upper[i]
+        elif basic_upper[i] < final_upper[i - 1] or close_arr[i - 1] > final_upper[i - 1]:
+            final_upper[i] = basic_upper[i]
+        else:
+            final_upper[i] = final_upper[i - 1]
+
+        # Lower band: sadece yukselibilir ya da reset olur
+        if np.isnan(basic_lower[i]) or np.isnan(final_lower[i - 1]):
+            final_lower[i] = basic_lower[i]
+        elif basic_lower[i] > final_lower[i - 1] or close_arr[i - 1] < final_lower[i - 1]:
+            final_lower[i] = basic_lower[i]
+        else:
+            final_lower[i] = final_lower[i - 1]
+
+        # Trend yonu
+        if direction[i - 1]:
+            direction[i] = close_arr[i] >= final_lower[i]
+        else:
+            direction[i] = close_arr[i] > final_upper[i]
+
+    return pd.Series(direction, index=close.index)
+
+
+def rsi_divergence(close: pd.Series, rsi_series: pd.Series, lookback: int = 20) -> float:
+    """
+    RSI uyusmazligi (divergence) tespiti.
+    +1.0  = Bullish divergence (fiyat dusuk dip, RSI yukari dip)
+    -1.0  = Bearish divergence (fiyat yukari zirve, RSI asagi zirve)
+     0.0  = Yok
+    """
+    if len(close) < lookback + 2:
+        return 0.0
+
+    c = close.values[-lookback:]
+    r = rsi_series.values[-lookback:]
+    mid = lookback // 2
+
+    recent_c = c[mid:]
+    prior_c = c[:mid]
+    recent_r = r[mid:]
+    prior_r = r[:mid]
+
+    r_lo_idx = int(np.argmin(recent_c))
+    r_hi_idx = int(np.argmax(recent_c))
+    p_lo_idx = int(np.argmin(prior_c))
+    p_hi_idx = int(np.argmax(prior_c))
+
+    # Bullish: fiyat daha dusuk dip yapti ama RSI daha yuksek dip
+    if recent_c[r_lo_idx] < prior_c[p_lo_idx] and recent_r[r_lo_idx] > prior_r[p_lo_idx]:
+        return 1.0
+
+    # Bearish: fiyat daha yuksek tepe ama RSI daha dusuk tepe
+    if recent_c[r_hi_idx] > prior_c[p_hi_idx] and recent_r[r_hi_idx] < prior_r[p_hi_idx]:
+        return -1.0
+
+    return 0.0
+
+
 def compute_all(df: pd.DataFrame) -> dict:
     """Son mum icin tum indikator degerlerini bir sozlukte dondurur."""
     close, high, low, vol = df["close"], df["high"], df["low"], df["volume"]
@@ -100,6 +189,9 @@ def compute_all(df: pd.DataFrame) -> dict:
     stoch_k, stoch_d = stochastic(high, low, close)
     adx14, plus_di, minus_di = adx(high, low, close)
     vol_sma = sma(vol, 20)
+    vwap_line = vwap(df)
+    st_bull = supertrend(high, low, close)
+    rsi_div = rsi_divergence(close, rsi14)
 
     i = -1  # son kapanmis mum
 
@@ -128,4 +220,7 @@ def compute_all(df: pd.DataFrame) -> dict:
         "minus_di": last(minus_di),
         "volume": last(vol),
         "vol_sma": last(vol_sma),
+        "vwap": last(vwap_line),
+        "supertrend_bull": bool(st_bull.iloc[i]),
+        "rsi_divergence": rsi_div,
     }

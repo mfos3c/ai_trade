@@ -5,12 +5,15 @@ import argparse
 import time
 from pathlib import Path
 
+import os
+
 from . import reporter
 from .analyzer import combine, trade_levels
 from .binance_client import BinanceFutures
 from .config import ROOT, load_config
 from .minimax import MiniMaxClient
 from .paper_trader import PaperTrader
+from .signal_logger import log_daily_signals
 from .strategy import evaluate
 
 
@@ -90,6 +93,23 @@ def run_once(cfg, *, no_ai: bool = False, verbose: bool = True) -> dict:
     report_dir = _resolve(cfg.run.get("report_dir", "data"))
     reporter.write_markdown(report_dir, decisions, trader.state, stats)
     reporter.write_signals_json(report_dir, decisions, stats)
+
+    # Günlük sinyal logu
+    log_daily_signals(decisions, report_dir)
+
+    # Güçlü sinyal Telegram uyarısı (token varsa)
+    tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if tg_token and tg_chat:
+        from .telegram_notifier import TelegramNotifier
+        notifier = TelegramNotifier(tg_token, tg_chat)
+        active_sigs = [
+            {"symbol": d.symbol, "direction": d.direction, "confidence": d.confidence,
+             "leverage": d.leverage, "price": d.price, "take_profit": d.take_profit}
+            for d in decisions if d.direction != "NEUTRAL" and d.confidence >= 70
+        ]
+        notifier.send_scan_alert(active_sigs)
+
     return stats
 
 

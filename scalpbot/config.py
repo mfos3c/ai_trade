@@ -17,6 +17,10 @@ except ImportError:  # dotenv opsiyonel
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# Vercel/serverless ortamında data dosyaları /tmp/ altında tutulur
+_VERCEL_DATA = os.getenv("VERCEL_DATA_DIR", "")
+DATA_ROOT: Path = Path(_VERCEL_DATA) if _VERCEL_DATA else ROOT
+
 
 @dataclass
 class Config:
@@ -56,5 +60,10 @@ def load_config(config_path: str | Path | None = None) -> Config:
         market=raw.get("market", {}),
         strategy=raw.get("strategy", {}),
         risk=raw.get("risk", {}),
-        run=raw.get("run", {}),
+        run={
+            **raw.get("run", {}),
+            # Vercel ortamında data dizinini /tmp/ altına yönlendir
+            **({"report_dir": str(DATA_ROOT / "data"), "state_file": str(DATA_ROOT / "data/state.json")}
+               if _VERCEL_DATA else {}),
+        },
     )
