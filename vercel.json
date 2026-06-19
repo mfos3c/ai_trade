@@ -5,7 +5,8 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "50mb"
+        "maxLambdaSize": "50mb",
+        "runtime": "python3.12"
       }
     }
   ],
@@ -15,12 +16,6 @@
       "dest": "api/index.py"
     }
   ],
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 60,
-      "memory": 512
-    }
-  },
   "env": {
     "VERCEL_DATA_DIR": "/tmp/ai_trade"
   }
