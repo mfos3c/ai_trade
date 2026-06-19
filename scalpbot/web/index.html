@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scalp Bot · Dashboard</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2430; --border:#30363d;
+    --txt:#e6edf3; --muted:#8b949e; --green:#3fb950; --red:#f85149;
+    --blue:#58a6ff; --yellow:#d29922; --accent:#1f6feb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--txt);font-size:14px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;
+         padding:16px 22px;border-bottom:1px solid var(--border);background:var(--panel);
+         position:sticky;top:0;z-index:10;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;display:flex;align-items:center;gap:10px}
+  h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--green);
+          box-shadow:0 0 8px var(--green)}
+  .sub{color:var(--muted);font-size:12px}
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  button{background:var(--accent);color:#fff;border:0;border-radius:6px;
+         padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.1)} button:disabled{opacity:.5;cursor:not-allowed}
+  .pill{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);
+        color:var(--muted)}
+  .pill.on{color:var(--green);border-color:var(--green)}
+  .pill.off{color:var(--muted)}
+  main{padding:22px;max-width:1200px;margin:0 auto}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .card .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .card .value{font-size:26px;font-weight:700;margin-top:6px}
+  .card .value small{font-size:13px;font-weight:500;color:var(--muted)}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  section{margin-bottom:28px}
+  section h2{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+             margin:0 0 12px;display:flex;gap:8px;align-items:center}
+  section h2 .count{background:var(--panel2);border:1px solid var(--border);border-radius:20px;
+                    padding:1px 9px;font-size:12px;color:var(--txt)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);
+        border-radius:10px;overflow:hidden}
+  th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;background:var(--panel2)}
+  tr:last-child td{border-bottom:0}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .badge{display:inline-block;padding:2px 10px;border-radius:6px;font-weight:700;font-size:12px}
+  .LONG{background:rgba(63,185,80,.15);color:var(--green)}
+  .SHORT{background:rgba(248,81,73,.15);color:var(--red)}
+  .NEUTRAL{background:rgba(139,148,158,.15);color:var(--muted)}
+  .TP{color:var(--green)} .SL{color:var(--red)} .CLOSE{color:var(--muted)}
+  .conf-bar{height:6px;border-radius:4px;background:var(--panel2);overflow:hidden;width:80px;display:inline-block;vertical-align:middle;margin-right:8px}
+  .conf-bar > span{display:block;height:100%}
+  .ai-tag{font-size:11px;color:var(--blue)}
+  .empty{color:var(--muted);padding:18px;text-align:center;background:var(--panel);
+         border:1px dashed var(--border);border-radius:10px}
+  .muted{color:var(--muted)} .mono{font-variant-numeric:tabular-nums}
+  .err{background:rgba(248,81,73,.12);border:1px solid var(--red);color:#ffb4ae;
+       padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px}
+  .grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:28px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .panel h3{margin:0 0 12px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .chart{width:100%;height:170px;display:block}
+  .wr-wrap{display:flex;align-items:center;gap:18px}
+  .donut{position:relative;width:104px;height:104px;border-radius:50%;flex:none;
+    background:conic-gradient(var(--green) calc(var(--p,0)*1%),var(--red) 0);display:grid;place-items:center}
+  .donut .hole{width:74px;height:74px;border-radius:50%;background:var(--panel);
+    display:grid;place-items:center;font-weight:700;font-size:20px}
+  .wr-leg div{margin:6px 0;font-size:13px}
+  .wr-leg .k{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><span class="dot" id="livedot"></span> ai_trade</h1>
+    <div class="sub">$1 altı · 15dk · LONG/SHORT sinyal + $10 paper trading</div>
+  </div>
+  <div class="controls">
+    <span class="pill" id="aipill">AI</span>
+    <span class="pill" id="updpill">—</span>
+    <label class="sub"><input type="checkbox" id="autoref" checked> oto-yenile</label>
+    <button id="scanbtn" onclick="triggerScan()">⟳ Tara</button>
+  </div>
+</header>
+
+<main>
+  <div id="errbox"></div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h3>Bakiye Eğrisi (equity)</h3>
+      <svg class="chart" id="equity" viewBox="0 0 600 170" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="panel">
+      <h3>Başarı Oranı</h3>
+      <div class="wr-wrap">
+        <div class="donut" id="donut"><div class="hole" id="donutVal">0%</div></div>
+        <div class="wr-leg">
+          <div><span class="k" style="background:var(--green)"></span><b id="wrW">0</b> kazanç (TP)</div>
+          <div><span class="k" style="background:var(--red)"></span><b id="wrL">0</b> kayıp (SL)</div>
+          <div class="muted" id="wrTotal">0 işlem</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Aktif Sinyaller <span class="count" id="sigcount">0</span></h2>
+    <div id="signals"></div>
+  </section>
+
+  <section>
+    <h2>Açık Pozisyonlar <span class="count" id="poscount">0</span></h2>
+    <div id="positions"></div>
+  </section>
+
+  <section>
+    <h2>Son Kapanan İşlemler <span class="count" id="tradecount">0</span></h2>
+    <div id="trades"></div>
+  </section>
+</main>
+
+<script>
+const fmtP = (n,d=6)=> (n==null?'—':Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}));
+const fmt2 = (n)=> (n==null?'—':Number(n).toFixed(2));
+const sign = (n)=> (n>=0?'pos':'neg');
+const signStr=(n)=> (n>=0?'+':'')+Number(n).toFixed(4);
+
+function confBar(c){
+  const col = c>=70?'var(--green)':c>=50?'var(--yellow)':'var(--muted)';
+  return `<span class="conf-bar"><span style="width:${Math.min(100,c)}%;background:${col}"></span></span>${fmt2(c)}`;
+}
+
+function relTime(iso){
+  if(!iso) return '—';
+  const s=(Date.now()-new Date(iso).getTime())/1000;
+  if(s<60) return Math.round(s)+'sn önce';
+  if(s<3600) return Math.round(s/60)+'dk önce';
+  return Math.round(s/3600)+'sa önce';
+}
+
+function renderEquity(start, trades){
+  const svg=document.getElementById('equity');
+  const W=600,H=170,pad=8;
+  // baslangic bakiyesinden itibaren kumulatif egri
+  const pts=[start];
+  let bal=start;
+  trades.forEach(t=>{ bal+=t.pnl; pts.push(bal); });
+  if(pts.length<2){
+    svg.innerHTML=`<text x="${W/2}" y="${H/2}" fill="#8b949e" font-size="13" text-anchor="middle">Henüz işlem yok — kapanan işlemler burada birikecek</text>`;
+    return;
+  }
+  const min=Math.min(...pts), max=Math.max(...pts), rng=(max-min)||1;
+  const x=i=> pad + i*(W-2*pad)/(pts.length-1);
+  const y=v=> H-pad - (v-min)/rng*(H-2*pad);
+  const line=pts.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const area=`${line} L${x(pts.length-1).toFixed(1)},${H-pad} L${pad},${H-pad} Z`;
+  const up = pts[pts.length-1]>=start;
+  const col = up?'#3fb950':'#f85149';
+  const base=y(start).toFixed(1);
+  svg.innerHTML=`
+    <defs><linearGradient id="eg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="${col}" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="${pad}" x2="${W-pad}" y1="${base}" y2="${base}" stroke="#30363d" stroke-dasharray="4 4"/>
+    <path d="${area}" fill="url(#eg)"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="2"/>`;
+}
+
+function renderWinRate(wins, losses){
+  const total=wins+losses;
+  const wr= total? wins/total*100 : 0;
+  const dn=document.getElementById('donut');
+  dn.style.setProperty('--p', wr.toFixed(1));
+  document.getElementById('donutVal').textContent=Math.round(wr)+'%';
+  document.getElementById('wrW').textContent=wins;
+  document.getElementById('wrL').textContent=losses;
+  document.getElementById('wrTotal').textContent=total+' işlem';
+}
+
+async function load(){
+  let d;
+  try{ d = await (await fetch('/api/state')).json(); }
+  catch(e){ return; }
+
+  // AI pill
+  const ai=document.getElementById('aipill');
+  ai.textContent = d.ai_enabled?'AI: MiniMax M3 ✓':'AI: kapalı (sadece TA)';
+  ai.className = 'pill '+(d.ai_enabled?'on':'off');
+
+  // scan/update durumu
+  const dot=document.getElementById('livedot');
+  const btn=document.getElementById('scanbtn');
+  if(d.scan && d.scan.running){ dot.style.background='var(--yellow)';dot.style.boxShadow='0 0 8px var(--yellow)';
+      btn.disabled=true; btn.textContent='⟳ Taranıyor…'; }
+  else{ dot.style.background='var(--green)';dot.style.boxShadow='0 0 8px var(--green)';
+      btn.disabled=false; btn.textContent='⟳ Tara'; }
+
+  const sig=d.signals||{};
+  document.getElementById('updpill').textContent='güncelleme: '+relTime(sig.updated_at);
+
+  // hata kutusu
+  const errbox=document.getElementById('errbox');
+  errbox.innerHTML = (d.scan && d.scan.error)? `<div class="err">⚠ Tarama hatası: ${d.scan.error}</div>`:'';
+
+  // kartlar
+  const st = sig.stats||{};
+  const bal = st.balance ?? d.balance ?? d.start_balance;
+  const roi = st.roi_pct ?? 0;
+  document.getElementById('cards').innerHTML = `
+    <div class="card"><div class="label">Bakiye</div>
+      <div class="value">$${fmt2(bal)} <small>/ $${fmt2(st.start_balance ?? d.start_balance ?? 10)}</small></div></div>
+    <div class="card"><div class="label">ROI</div>
+      <div class="value ${sign(roi)}">${roi>=0?'+':''}${fmt2(roi)}%</div></div>
+    <div class="card"><div class="label">Win Rate</div>
+      <div class="value">${fmt2(st.win_rate ?? 0)}% <small>${st.wins??0}W / ${st.losses??0}L</small></div></div>
+    <div class="card"><div class="label">Toplam PnL</div>
+      <div class="value ${sign(st.total_pnl ?? 0)}">${signStr(st.total_pnl ?? 0)}</div></div>
+    <div class="card"><div class="label">İşlem</div>
+      <div class="value">${st.total_trades ?? 0} <small>${sig.active??0} aktif sinyal</small></div></div>
+  `;
+
+  // bakiye egrisi + basari orani
+  const allTrades=d.closed_trades||[];
+  renderEquity(st.start_balance ?? d.start_balance ?? 10, allTrades);
+  renderWinRate(st.wins ?? 0, st.losses ?? 0);
+
+  // sinyaller
+  const rows=(sig.signals||[]).filter(s=>s.direction!=='NEUTRAL');
+  document.getElementById('sigcount').textContent=rows.length;
+  const sigEl=document.getElementById('signals');
+  if(!rows.length){ sigEl.innerHTML='<div class="empty">Eşiği geçen aktif sinyal yok. "Tara" ile yeni tarama başlat.</div>'; }
+  else{
+    sigEl.innerHTML=`<table><thead><tr>
+      <th>Coin</th><th>Yön</th><th>Güven</th><th>Giriş</th><th>Stop</th><th>Hedef</th><th>AI</th><th>Not / Gerekçe</th>
+      </tr></thead><tbody>${rows.map(s=>`
+      <tr><td><b>${s.symbol}</b></td>
+        <td><span class="badge ${s.direction}">${s.direction}</span></td>
+        <td>${confBar(s.confidence)}</td>
+        <td class="mono">${fmtP(s.price)}</td>
+        <td class="mono neg">${fmtP(s.stop_loss)}</td>
+        <td class="mono pos">${fmtP(s.take_profit)}</td>
+        <td>${s.ai_direction?`<span class="badge ${s.ai_direction}" style="font-size:11px">${s.ai_direction}</span>`:'<span class="muted">—</span>'}</td>
+        <td class="muted">${(s.ai_reason||s.note||'').slice(0,70)}</td></tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  // acik pozisyonlar
+  const pos=d.open_positions||[];
+  document.getElementById('poscount').textContent=pos.length;
+  const posEl=document.getElementById('positions');
+  if(!pos.length){ posEl.innerHTML='<div class="empty">Açık pozisyon yok.</div>'; }
+  else{
+    posEl.innerHTML=`<table><thead><tr>
+      <th>Coin</th><th>Yön</th><th>Giriş</th><th>Stop</th><th>Hedef</th><th>Marjin</th><th>Kald.</th><th>Güven</th>
+      </tr></thead><tbody>${pos.map(p=>`
+      <tr><td><b>${p.symbol}</b></td>
+        <td><span class="badge ${p.direction}">${p.direction}</span></td>
+        <td class="mono">${fmtP(p.entry)}</td>
+        <td class="mono neg">${fmtP(p.stop_loss)}</td>
+        <td class="mono pos">${fmtP(p.take_profit)}</td>
+        <td class="mono">$${fmt2(p.margin)}</td>
+        <td>${p.leverage}x</td>
+        <td>${fmt2(p.confidence)}</td></tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  // kapanan islemler
+  const tr=(d.closed_trades||[]).slice(-20).reverse();
+  document.getElementById('tradecount').textContent=(d.closed_trades||[]).length;
+  const trEl=document.getElementById('trades');
+  if(!tr.length){ trEl.innerHTML='<div class="empty">Henüz kapanan işlem yok.</div>'; }
+  else{
+    trEl.innerHTML=`<table><thead><tr>
+      <th>Coin</th><th>Yön</th><th>Giriş</th><th>Çıkış</th><th>Sonuç</th><th>PnL</th><th>%</th>
+      </tr></thead><tbody>${tr.map(t=>`
+      <tr><td><b>${t.symbol}</b></td>
+        <td><span class="badge ${t.direction}">${t.direction}</span></td>
+        <td class="mono">${fmtP(t.entry)}</td>
+        <td class="mono">${fmtP(t.exit)}</td>
+        <td class="${t.outcome}"><b>${t.outcome}</b></td>
+        <td class="mono ${sign(t.pnl)}">${signStr(t.pnl)}</td>
+        <td class="mono ${sign(t.pnl_pct)}">${t.pnl_pct>=0?'+':''}${fmt2(t.pnl_pct)}%</td></tr>`).join('')}
+      </tbody></table>`;
+  }
+}
+
+async function triggerScan(){
+  const btn=document.getElementById('scanbtn');
+  btn.disabled=true; btn.textContent='⟳ Başlatılıyor…';
+  try{ await fetch('/api/scan',{method:'POST'}); }catch(e){}
+  setTimeout(load, 800);
+}
+
+function tick(){ if(document.getElementById('autoref').checked) load(); }
+load();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>
